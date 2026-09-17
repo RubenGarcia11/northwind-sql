@@ -1,2 +1,2 @@
-# northwind-sql
+# Ejercicio 1 SQL
 
