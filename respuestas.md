@@ -1,1 +1,0 @@
-# Respuestas Práctica Northwind
