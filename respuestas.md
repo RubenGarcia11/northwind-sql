@@ -5,6 +5,7 @@
 
 **Consulta:**
 ```sql
+-- Obtiene el nombre y precio redondeado de los productos activos con precio entre 10 y 50
 SELECT product_name AS producto, ROUND(unit_price::numeric, 2) AS precio
 FROM products
 WHERE discontinued = 0 AND unit_price BETWEEN 10 AND 50
@@ -14,7 +15,7 @@ ORDER BY unit_price DESC;
 **Resultado:**
 ![Resultado](img/p01.png)
 
-**Comentario:** He filtrado usando `discontinued = 0` y `BETWEEN` para el rango de precios. El casteo a `numeric` dentro del `ROUND` asegura precisión decimal.
+**Comentario:** Uso `discontinued = 0` y `BETWEEN` para filtrar. El cast a `numeric` dentro de `ROUND` evita errores de redondeo.
 
 ---
 
@@ -23,6 +24,7 @@ ORDER BY unit_price DESC;
 
 **Consulta:**
 ```sql
+-- Cuenta clientes y ciudades distintas por país, mostrando solo los países con 5 o más clientes
 SELECT country AS pais, COUNT(customer_id) AS num_clientes, COUNT(DISTINCT city) AS num_ciudades
 FROM customers
 GROUP BY country
@@ -33,7 +35,7 @@ ORDER BY num_clientes DESC;
 **Resultado:**
 ![Resultado](img/p02.png)
 
-**Comentario:** Uso `HAVING` porque el filtro de >= 5 clientes se aplica al resultado de la agregación `COUNT(customer_id)`, por lo que no es posible hacerlo en el `WHERE`.
+**Comentario:** `HAVING` permite filtrar por el conteo `COUNT(customer_id) >= 5` después de agrupar por país.
 
 ---
 
@@ -42,6 +44,7 @@ ORDER BY num_clientes DESC;
 
 **Consulta:**
 ```sql
+-- Detecta productos activos con stock crítico o bajo aviso respecto a su nivel de reposición
 SELECT product_name AS producto, units_in_stock AS stock, reorder_level AS nivel_reposicion, units_on_order AS pedido_a_proveedor,
   CASE 
     WHEN units_in_stock = 0 THEN 'CRÍTICO'
@@ -54,7 +57,7 @@ WHERE discontinued = 0 AND units_in_stock <= reorder_level;
 **Resultado:**
 ![Resultado](img/p03.png)
 
-**Comentario:** Para crear la columna personalizada uso la sentencia condicional `CASE WHEN`. El filtro de stock menor o igual al nivel de reposición se hace fácilmente en el `WHERE`.
+**Comentario:** Uso `CASE WHEN` para crear la columna condicional y `WHERE` para el filtro de stock.
 
 ---
 
@@ -63,6 +66,7 @@ WHERE discontinued = 0 AND units_in_stock <= reorder_level;
 
 **Consulta:**
 ```sql
+-- Lista productos, categorías y datos del proveedor para los suministrados desde Italia, Francia o España
 SELECT p.product_name AS producto, c.category_name AS categoria, s.company_name AS proveedor, s.country AS pais, s.city AS ciudad
 FROM products p
 INNER JOIN categories c ON p.category_id = c.category_id
@@ -74,7 +78,7 @@ ORDER BY s.country, p.product_name;
 **Resultado:**
 ![Resultado](img/p04.png)
 
-**Comentario:** Hago `INNER JOIN` de las tablas `products`, `categories` y `suppliers` para obtener la información solicitada. Uso `IN` para filtrar por los 3 países deseados.
+**Comentario:** Hago `INNER JOIN` entre las tres tablas relacionadas y `IN` para filtrar los tres países europeos.
 
 ---
 
@@ -83,6 +87,7 @@ ORDER BY s.country, p.product_name;
 
 **Consulta:**
 ```sql
+-- Detalle completo valorizado de las líneas del pedido 10248
 SELECT c.company_name AS cliente, o.order_date AS fecha_pedido, p.product_name AS producto, od.unit_price AS precio_unitario, od.quantity AS cantidad, od.discount AS descuento,
 ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2) AS importe_linea
 FROM orders o
@@ -95,7 +100,7 @@ WHERE o.order_id = 10248;
 **Resultado:**
 ![Resultado](img/p05.png)
 
-**Comentario:** Utilizo la cláusula `USING` porque las columnas a unir comparten exactamente el mismo nombre (`customer_id`, `order_id`, `product_id`), lo que simplifica la sintaxis de las cuatro uniones.
+**Comentario:** Utilizo `USING` para simplificar los `INNER JOIN`, ya que las claves foráneas tienen el mismo nombre en ambas tablas.
 
 ---
 
@@ -104,6 +109,7 @@ WHERE o.order_id = 10248;
 
 **Consulta:**
 ```sql
+-- Muestra las categorías que superan los 100.000 de facturación total, con número de líneas y productos distintos
 SELECT c.category_name AS categoria, COUNT(od.order_id) AS num_lineas, COUNT(DISTINCT od.product_id) AS num_productos,
 SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS facturacion
 FROM categories c
@@ -117,7 +123,7 @@ ORDER BY facturacion DESC;
 **Resultado:**
 ![Resultado](img/p06.png)
 
-**Comentario:** Hago la agregación con `GROUP BY` por categoría, usando `COUNT(DISTINCT ...)` para los productos únicos vendidos. El filtro de más de 100.000 euros debe ir en el `HAVING` al depender de la sumatoria agregada.
+**Comentario:** Uso `COUNT(DISTINCT ...)` para productos únicos y `HAVING` para filtrar la suma total agregada.
 
 ---
 
@@ -126,6 +132,7 @@ ORDER BY facturacion DESC;
 
 **Consulta:**
 ```sql
+-- Lista clientes con su cantidad de pedidos y la fecha del último pedido, incluyendo inactivos
 SELECT c.company_name AS cliente, c.country AS pais, COUNT(o.order_id) AS num_pedidos,
 COALESCE(MAX(o.order_date)::text, 'SIN PEDIDOS') AS ultimo_pedido
 FROM customers c
@@ -137,7 +144,7 @@ ORDER BY num_pedidos ASC, c.company_name ASC;
 **Resultado:**
 ![Resultado](img/p07.png)
 
-**Comentario:** He usado `LEFT JOIN` y `COUNT(o.order_id)` en lugar de `COUNT(*)` para que los clientes sin pedidos sumen 0. Uso `COALESCE` para manejar el valor nulo de la fecha máxima y lo convierto a texto explícitamente (`::text`).
+**Comentario:** Un `LEFT JOIN` junto con `COUNT(columna)` asegura que los clientes inactivos sumen 0. Uso `COALESCE` para dar formato al valor nulo.
 
 ---
 
@@ -146,6 +153,7 @@ ORDER BY num_pedidos ASC, c.company_name ASC;
 
 **Consulta:**
 ```sql
+-- Organigrama de empleados mostrando a quién reportan
 SELECT e1.first_name || ' ' || e1.last_name AS empleado, e1.title AS cargo,
 COALESCE(e2.first_name || ' ' || e2.last_name, 'DIRECCIÓN GENERAL') AS responsable,
 e2.title AS cargo_responsable
@@ -156,7 +164,7 @@ LEFT JOIN employees e2 ON e1.reports_to = e2.employee_id;
 **Resultado:**
 ![Resultado](img/p08.png)
 
-**Comentario:** Hago un `SELF JOIN` usando `LEFT JOIN` para incluir al director general. Es crucial el uso de alias de tabla (`e1`, `e2`) para diferenciar el empleado de su responsable.
+**Comentario:** El `SELF JOIN` con alias `e1` y `e2` es obligatorio para relacionar la tabla consigo misma.
 
 ---
 
@@ -165,6 +173,7 @@ LEFT JOIN employees e2 ON e1.reports_to = e2.employee_id;
 
 **Consulta:**
 ```sql
+-- Rejilla completa de facturación cruzando todas las categorías con todos los años disponibles
 WITH anios AS (
   SELECT DISTINCT EXTRACT(YEAR FROM order_date) AS anio FROM orders
 ),
@@ -186,7 +195,7 @@ ORDER BY r.categoria, r.anio;
 **Resultado:**
 ![Resultado](img/p09.png)
 
-**Comentario:** Utilizo un `CROSS JOIN` en una CTE para construir el esqueleto de 24 combinaciones (categoría × año) y posteriormente lo uno (`LEFT JOIN`) con los datos reales, asegurando que las combinaciones sin ventas queden con facturación 0.
+**Comentario:** Construyo las combinaciones totales con un `CROSS JOIN` en una CTE y luego uno los datos con `LEFT JOIN`.
 
 ---
 
@@ -195,6 +204,7 @@ ORDER BY r.categoria, r.anio;
 
 **Consulta:**
 ```sql
+-- Mapa de países mostrando cantidad de clientes y proveedores en cada uno
 WITH paises_clientes AS (
   SELECT country AS pais, COUNT(customer_id) AS num_clientes
   FROM customers
@@ -221,7 +231,7 @@ ORDER BY pais;
 **Resultado:**
 ![Resultado](img/p10.png)
 
-**Comentario:** Calculo de forma aislada las cantidades por país en CTEs independientes y uso un `FULL JOIN` para unirlas. Así retengo países que sólo están en clientes o sólo en proveedores, decidiendo el texto con un `CASE WHEN`.
+**Comentario:** Calculo clientes y proveedores en CTEs separadas y las uno mediante `FULL JOIN` conservando todos los países.
 
 ---
 
@@ -230,6 +240,7 @@ ORDER BY pais;
 
 **Consulta:**
 ```sql
+-- Directorio unificado de todos los contactos (clientes, proveedores y empleados)
 SELECT 'CLIENTE' AS origen, UPPER(contact_name) AS contacto, company_name AS organizacion, city AS ciudad, country AS pais
 FROM customers
 UNION ALL
@@ -244,5 +255,137 @@ ORDER BY origen, pais;
 **Resultado:**
 ![Resultado](img/p11.png)
 
-**Comentario:** Uso `UNION ALL` para combinar tres consultas independientes en una sola tabla, asegurando coincidencia en número y orden de columnas. Utilizo la función `UPPER()` y un literal 'NORTHWIND TRADERS' para cumplir los requisitos de texto de los empleados.
+**Comentario:** `UNION ALL` combina los contactos manteniendo el mismo número y orden de columnas.
 
+---
+
+## Pregunta 12 — Mercados con desequilibrio
+**Enunciado:** Resuelve las dos preguntas en dos consultas independientes:
+a) Países donde hay clientes pero ningún proveedor.
+b) Países donde hay a la vez clientes y proveedores.
+Ordena ambos resultados alfabéticamente.
+
+**Consulta a):**
+```sql
+-- a) Países con clientes pero sin proveedores
+SELECT country AS pais FROM customers
+EXCEPT
+SELECT country AS pais FROM suppliers
+ORDER BY pais;
+```
+
+**Resultado a):**
+![Resultado a)](img/p12-a.png)
+
+**Consulta b):**
+```sql
+-- b) Países con clientes y proveedores a la vez
+SELECT country AS pais FROM customers
+INTERSECT
+SELECT country AS pais FROM suppliers
+ORDER BY pais;
+```
+
+**Resultado b):**
+![Resultado b)](img/p12-b.png)
+
+**Comentario:** `EXCEPT` retiene la diferencia de conjuntos e `INTERSECT` la intersección. Ambos eliminan duplicados automáticamente.
+
+---
+
+## Pregunta 13 — Clientes que nunca han comprado pescado
+**Enunciado:** Localiza los clientes que nunca han incluido un producto de la categoría 'Seafood' en ninguno de sus pedidos. Muestra el nombre del cliente, su país y el número total de pedidos que sí ha realizado, de mayor a menor.
+
+**Consulta:**
+```sql
+-- Clientes sin compras en la categoría Seafood y total de sus pedidos
+SELECT c.company_name AS cliente, c.country AS pais, COUNT(o.order_id) AS pedidos_realizados
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM orders o2
+  INNER JOIN order_details od ON o2.order_id = od.order_id
+  INNER JOIN products p ON od.product_id = p.product_id
+  INNER JOIN categories cat ON p.category_id = cat.category_id
+  WHERE o2.customer_id = c.customer_id AND cat.category_name = 'Seafood'
+)
+GROUP BY c.company_name, c.country
+ORDER BY pedidos_realizados DESC;
+```
+
+**Resultado:**
+![Resultado](img/p13.png)
+
+**Comentario:** El anti-join con `NOT EXISTS` evita problemas con valores nulos, apoyándose en una subconsulta correlacionada.
+
+---
+
+## Pregunta 14 — Productos por encima de la media
+**Enunciado:** Muestra los productos activos cuyo precio unitario supere el precio medio de todo el catálogo. Incluye en cada fila el precio del producto, el precio medio general y la diferencia entre ambos, todo redondeado a dos decimales. Ordena por diferencia descendente.
+
+**Consulta:**
+```sql
+-- Productos activos con precio superior a la media del catálogo
+SELECT product_name AS producto, ROUND(unit_price::numeric, 2) AS precio,
+ROUND((SELECT AVG(unit_price) FROM products)::numeric, 2) AS precio_medio_catalogo,
+ROUND((unit_price - (SELECT AVG(unit_price) FROM products))::numeric, 2) AS diferencia
+FROM products
+WHERE discontinued = 0 AND unit_price > (SELECT AVG(unit_price) FROM products)
+ORDER BY diferencia DESC;
+```
+
+**Resultado:**
+![Resultado](img/p14.png)
+
+**Comentario:** Una subconsulta escalar en el `SELECT` y en el `WHERE` permite reutilizar la media global del catálogo.
+
+---
+
+## Pregunta 15 — Ticket medio por cliente
+**Enunciado:** Calcula, para cada cliente que haya comprado alguna vez, el número de pedidos, el importe total acumulado y el importe medio por pedido. Muestra los 15 clientes con mayor ticket medio.
+
+**Consulta:**
+```sql
+-- Top 15 clientes con mayor ticket medio por pedido
+SELECT cliente, pais, COUNT(order_id) AS num_pedidos,
+SUM(importe_pedido) AS importe_total,
+ROUND((SUM(importe_pedido) / COUNT(order_id))::numeric, 2) AS ticket_medio
+FROM (
+  SELECT c.company_name AS cliente, c.country AS pais, o.order_id,
+  SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS importe_pedido
+  FROM customers c
+  INNER JOIN orders o ON c.customer_id = o.customer_id
+  INNER JOIN order_details od ON o.order_id = od.order_id
+  GROUP BY c.company_name, c.country, o.order_id
+) AS pedidos_cliente
+GROUP BY cliente, pais
+ORDER BY ticket_medio DESC
+LIMIT 15;
+```
+
+**Resultado:**
+![Resultado](img/p15.png)
+
+**Comentario:** Agrupo primero por pedido en una tabla derivada y luego por cliente para obtener promedios correctos por encima del importe.
+
+---
+
+## Pregunta 16 — El producto más caro de cada categoría
+**Enunciado:** Para cada categoría, muestra el producto con el precio unitario más alto. Incluye el nombre de la categoría, el nombre del producto, su precio y el precio medio de su categoría. Resuélvelo con una subconsulta correlacionada: para cada producto, comprueba si su precio coincide con el máximo de su propia categoría.
+
+**Consulta:**
+```sql
+-- El producto más caro de cada categoría comparado con el precio medio de la misma
+SELECT c.category_name AS categoria, p.product_name AS producto, ROUND(p.unit_price::numeric, 2) AS precio,
+ROUND((SELECT AVG(unit_price) FROM products p2 WHERE p2.category_id = p.category_id)::numeric, 2) AS precio_medio_categoria
+FROM products p
+INNER JOIN categories c ON p.category_id = c.category_id
+WHERE p.unit_price = (SELECT MAX(unit_price) FROM products p3 WHERE p3.category_id = p.category_id)
+ORDER BY categoria, producto;
+```
+
+**Resultado:**
+![Resultado](img/p16.png)
+
+**Comentario:** Dos subconsultas correlacionadas filtran el máximo y calculan la media respecto a la categoría actual.
