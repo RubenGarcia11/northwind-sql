@@ -389,3 +389,169 @@ ORDER BY categoria, producto;
 ![Resultado](img/p16.png)
 
 **Comentario:** Dos subconsultas correlacionadas filtran el máximo y calculan la media respecto a la categoría actual.
+
+---
+
+## Pregunta 17 — Segmentación ABC de la cartera de clientes
+**Enunciado:** Usando expresiones de tabla común (CTE), construye una consulta que: Calcule la facturación total de cada cliente. Divida los clientes en cuartiles según esa facturación. Asigne una etiqueta de segmento: 'A - Estratégico', 'B - Consolidado', 'C - Ocasional' y 'D - Marginal'. Devuelva, por segmento, el número de clientes, la facturación total y el porcentaje que representa sobre el total.
+
+**Consulta:**
+```sql
+-- Segmentación de clientes en cuartiles según facturación con su impacto global
+WITH facturacion_clientes AS (
+  SELECT o.customer_id, 
+  SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS total_facturado
+  FROM orders o
+  INNER JOIN order_details od ON o.order_id = od.order_id
+  GROUP BY o.customer_id
+),
+cuartiles AS (
+  SELECT customer_id, total_facturado,
+  NTILE(4) OVER (ORDER BY total_facturado DESC) AS cuartil
+  FROM facturacion_clientes
+),
+segmentos AS (
+  SELECT customer_id, total_facturado,
+  CASE cuartil
+    WHEN 1 THEN 'A - Estratégico'
+    WHEN 2 THEN 'B - Consolidado'
+    WHEN 3 THEN 'C - Ocasional'
+    WHEN 4 THEN 'D - Marginal'
+  END AS segmento
+  FROM cuartiles
+),
+totales AS (
+  SELECT SUM(total_facturado) AS gran_total FROM facturacion_clientes
+)
+SELECT s.segmento, 
+  COUNT(s.customer_id) AS num_clientes, 
+  SUM(s.total_facturado) AS facturacion_segmento,
+  ROUND((SUM(s.total_facturado) / MAX(t.gran_total)) * 100, 2) AS porcentaje_sobre_total
+FROM segmentos s
+CROSS JOIN totales t
+GROUP BY s.segmento
+ORDER BY s.segmento;
+```
+
+**Resultado:**
+![Resultado](img/p17.png)
+
+**Comentario:** He añadido la CTE `totales` para extraer el `gran_total` y usarlo fácilmente. Es mucho más legible hacer el cruce (`CROSS JOIN`) que intentar calcular porcentajes con funciones de ventana anidadas.
+
+---
+
+## Pregunta 18 — Los tres productos más vendidos de cada categoría
+**Enunciado:** Para cada categoría, obtén los tres productos con mayor facturación. Muestra la categoría, la posición dentro de la categoría, el nombre del producto, las unidades vendidas y la facturación. Incluye además una columna con la posición global del producto en el conjunto de la compañía.
+
+**Consulta:**
+```sql
+-- Top 3 de productos por categoría y su posición global de facturación
+WITH facturacion_productos AS (
+  SELECT c.category_name AS categoria, p.product_name AS producto,
+  SUM(od.quantity) AS unidades,
+  SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS facturacion
+  FROM categories c
+  INNER JOIN products p ON c.category_id = p.category_id
+  INNER JOIN order_details od ON p.product_id = od.product_id
+  GROUP BY c.category_name, p.product_name
+),
+rankings AS (
+  SELECT categoria, producto, unidades, facturacion,
+  RANK() OVER (PARTITION BY categoria ORDER BY facturacion DESC) AS posicion_en_categoria,
+  RANK() OVER (ORDER BY facturacion DESC) AS posicion_global
+  FROM facturacion_productos
+)
+SELECT categoria, posicion_en_categoria, producto, unidades, facturacion, posicion_global
+FROM rankings
+WHERE posicion_en_categoria <= 3
+ORDER BY categoria, posicion_en_categoria;
+```
+
+**Resultado:**
+![Resultado](img/p18.png)
+
+**Comentario:** Aquí el proceso va por fases claras: primero obtengo el total facturado por producto, luego calculo los dos rangos (con y sin `PARTITION`) en la CTE `rankings`, y por último me limito a filtrar los 3 primeros.
+
+---
+
+## Pregunta 19 — Evolución mensual con acumulado y media móvil
+**Enunciado:** Para cada mes de 1997, calcula: la facturación del mes, el total acumulado desde enero, la media móvil de los tres últimos meses, la facturación del mes anterior y la variación porcentual.
+
+**Consulta:**
+```sql
+-- Cuadro de mando mensual de facturación de 1997 con acumulados y medias móviles
+WITH ventas_mensuales AS (
+  SELECT DATE_TRUNC('month', o.order_date) AS mes,
+  SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS facturacion
+  FROM orders o
+  INNER JOIN order_details od ON o.order_id = od.order_id
+  WHERE EXTRACT(YEAR FROM o.order_date) = 1997
+  GROUP BY DATE_TRUNC('month', o.order_date)
+),
+calculos_ventana AS (
+  SELECT mes, facturacion,
+  SUM(facturacion) OVER (ORDER BY mes) AS acumulado,
+  ROUND(AVG(facturacion) OVER (ORDER BY mes ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) AS media_movil_3m,
+  LAG(facturacion) OVER (ORDER BY mes) AS mes_anterior
+  FROM ventas_mensuales
+)
+SELECT mes, facturacion, acumulado, media_movil_3m, mes_anterior,
+ROUND(((facturacion - mes_anterior) / mes_anterior) * 100, 2) AS variacion_pct
+FROM calculos_ventana
+ORDER BY mes;
+```
+
+**Resultado:**
+![Resultado](img/p19.png)
+
+**Comentario:** He separado los cálculos de las funciones de ventana (`SUM`, `AVG`, `LAG`) en la CTE `calculos_ventana`. Así, el cálculo matemático del porcentaje final queda muy limpio y se evita repetir código complejo.
+
+---
+
+## Pregunta 20 — Cuadro de mando anual por categoría
+**Enunciado:** Construye una tabla donde cada fila sea una categoría y las columnas muestren la facturación de 1996, 1997 y 1998, más el total. Añade una fila de totales generales, el peso sobre el total y la tendencia entre 1997 y 1998.
+
+**Consulta:**
+```sql
+-- Cuadro de mando anual comparativo por categoría (NOTA: 1998 no es año completo)
+WITH pivotado AS (
+  SELECT 
+    COALESCE(c.category_name, 'TOTAL GENERAL') AS categoria,
+    SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1996) AS f_1996,
+    SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1997) AS f_1997,
+    SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1998) AS f_1998,
+    SUM(ROUND((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric), 2)) AS total
+  FROM categories c
+  INNER JOIN products p ON c.category_id = p.category_id
+  INNER JOIN order_details od ON p.product_id = od.product_id
+  INNER JOIN orders o ON od.order_id = o.order_id
+  GROUP BY ROLLUP(c.category_name)
+),
+totales_limpios AS (
+  SELECT categoria,
+    COALESCE(f_1996, 0) AS f_1996, 
+    COALESCE(f_1997, 0) AS f_1997, 
+    COALESCE(f_1998, 0) AS f_1998, 
+    total,
+    MAX(total) OVER () AS gran_total
+  FROM pivotado
+)
+SELECT categoria, f_1996, f_1997, f_1998, total,
+  ROUND((total / gran_total) * 100, 2) AS peso_pct,
+  CASE 
+    WHEN f_1997 = 0 OR f_1998 = 0 THEN NULL
+    WHEN f_1998 > f_1997 THEN 'CRECE'
+    WHEN f_1998 < f_1997 THEN 'DECRECE'
+    ELSE 'IGUAL'
+  END AS tendencia
+FROM totales_limpios
+ORDER BY CASE WHEN categoria = 'TOTAL GENERAL' THEN 1 ELSE 0 END, total DESC;
+```
+
+**Resultado:**
+![Resultado](img/p20.png)
+
+**Comentario:** Igual que antes, aíslo el cálculo engorroso del "Gran Total" (usando `MAX` en ventana) en la CTE `totales_limpios`. Esto hace que el `SELECT` final y su porcentaje se lean en español, ideal para no liarse.
+
+
+
